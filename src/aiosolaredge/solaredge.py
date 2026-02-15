@@ -103,7 +103,7 @@ class SolarEdge:
         site_id: int | str,
         start_time: datetime,
         end_time: datetime,
-        serials: Iterable[str] = [],
+        serials: Iterable[str] = (),
     ) -> dict[str, Any]:
         """
         Get storage data from batteries at the SolarEdge site.
