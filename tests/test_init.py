@@ -84,4 +84,29 @@ async def test_simple_requests() -> None:
         assert await solar_edge.get_energy_details(
             123, datetime.datetime.now(), datetime.datetime.now(), meters=["FEEDIN"]
         ) == {"meters": "meters"}
+
+        pattern = re.compile(
+            r"^https://monitoringapi\.solaredge\.com/site/123/storageData"
+        )
+        mocked.get(
+            pattern,
+            payload={"storageData": {"batteryCount": 1, "batteries": []}},
+        )
+        assert await solar_edge.get_storage_data(
+            123, datetime.datetime.now(), datetime.datetime.now()
+        ) == {"storageData": {"batteryCount": 1, "batteries": []}}
+
+        serials_pattern = re.compile(
+            r"^https://monitoringapi\.solaredge\.com/site/123/storageData.*serials="
+        )
+        mocked.get(
+            serials_pattern,
+            payload={"storageData": {"batteryCount": 1, "batteries": []}},
+        )
+        assert await solar_edge.get_storage_data(
+            123,
+            datetime.datetime.now(),
+            datetime.datetime.now(),
+            serials=["SN1", "SN2"],
+        ) == {"storageData": {"batteryCount": 1, "batteries": []}}
         await solar_edge.close()
