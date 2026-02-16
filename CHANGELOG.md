@@ -1,14 +1,29 @@
 # Changelog
 
+## v1.0.0-rc.1 (2026-02-16)
+
+### Features
+
+- Add get_storage_data method for battery telemetry ([`1159030`](https://github.com/Solarlibs/aiosolaredge/commit/1159030fc98b0f2a1a48cff734227dd3ef9dfb89))
+- Add get_storage_data method for battery telemetry ([`1159030`](https://github.com/Solarlibs/aiosolaredge/commit/1159030fc98b0f2a1a48cff734227dd3ef9dfb89))
+
+### Bug fixes
+
+- Use specific url pattern to verify serials param in storage data test ([`1159030`](https://github.com/Solarlibs/aiosolaredge/commit/1159030fc98b0f2a1a48cff734227dd3ef9dfb89))
+
+### Testing
+
+- Add coverage ([`fd4c96b`](https://github.com/Solarlibs/aiosolaredge/commit/fd4c96b25caeb9df9aa13b1538e5dc55c30a7878))
+
 ## v0.2.0 (2024-04-14)
 
-### Feature
+### Features
 
-- Add debug logging (#3) ([`dd184a4`](https://github.com/bdraco/aiosolaredge/commit/dd184a4aa6a50b4a48040b5f2caae04760f83a3d))
+- Add debug logging ([`dd184a4`](https://github.com/Solarlibs/aiosolaredge/commit/dd184a4aa6a50b4a48040b5f2caae04760f83a3d))
 
 ## v0.1.0 (2024-04-14)
 
-### Feature
+### Features
 
-- Restore py3.10 support (#2) ([`84cab1d`](https://github.com/bdraco/aiosolaredge/commit/84cab1d7ad548bf1f76a50811dcf3b4be03e1c7a))
-- First version (#1) ([`eb6962c`](https://github.com/bdraco/aiosolaredge/commit/eb6962c0e348246f1a2fc4b994bd3e0209d2ae89))
+- Restore py3.10 support ([`84cab1d`](https://github.com/Solarlibs/aiosolaredge/commit/84cab1d7ad548bf1f76a50811dcf3b4be03e1c7a))
+- First version ([`eb6962c`](https://github.com/Solarlibs/aiosolaredge/commit/eb6962c0e348246f1a2fc4b994bd3e0209d2ae89))
