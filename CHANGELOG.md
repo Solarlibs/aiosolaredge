@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.0.1 (2026-02-16)
+
+### Bug fixes
+
+- Release workflow ([`df27d41`](https://github.com/Solarlibs/aiosolaredge/commit/df27d417b1188375dd931a334ef8e7cf14b67c1e))
+
 ## v1.0.0 (2026-02-16)
 
 ### Features
