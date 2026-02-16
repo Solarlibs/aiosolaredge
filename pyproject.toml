@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "aiosolaredge"
-version = "1.0.0-rc.1"
+version = "1.0.0"
 description = "Asyncio SolarEdge"
 authors = ["J. Nick Koston <nick@koston.org>"]
 license = "MIT"
