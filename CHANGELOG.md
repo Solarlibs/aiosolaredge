@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.0.2 (2026-02-16)
+
+### Bug fixes
+
+- Second attempt to fix release workflow ([`bcad872`](https://github.com/Solarlibs/aiosolaredge/commit/bcad8726a35dded138741b5988f9c9078d7cdbdd))
+
 ## v1.0.1 (2026-02-16)
 
 ### Bug fixes
