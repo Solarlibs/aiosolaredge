@@ -391,6 +391,34 @@ class SolarEdge:
             params["meters"] = ",".join(meters)
         return await self._get_json(url, params=params)
 
+    async def get_storage_data(
+        self,
+        site_id: int | str,
+        start_time: datetime,
+        end_time: datetime,
+        serials: Iterable[str] = (),
+    ) -> dict[str, Any]:
+        """
+        Get storage data from batteries at the SolarEdge site.
+
+        Returns detailed battery telemetry including charge/discharge energy.
+        Limited to a one-week period.
+
+        :param site_id: The site ID.
+        :param start_time: The start time.
+        :param end_time: The end time.
+        :param serials: Optional battery serial numbers to filter by.
+        :return: The storage data of the SolarEdge system.
+        """
+        url = self._get_site_url(site_id).joinpath("storageData")
+        params: dict[str, Any] = {
+            "startTime": start_time.strftime(_DATETIME_FORMAT),
+            "endTime": end_time.strftime(_DATETIME_FORMAT),
+        }
+        if serials:
+            params["serials"] = ",".join(serials)
+        return await self._get_json(url, params=params)
+
     async def get_current_power_flow(self, site_id: int | str) -> dict[str, Any]:
         """
         Get current power flow of the SolarEdge system.

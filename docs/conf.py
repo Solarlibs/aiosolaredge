@@ -7,7 +7,7 @@
 project = "Asyncio SolarEdge"
 copyright = "2024, J. Nick Koston"
 author = "J. Nick Koston"
-release = "0.2.0"
+release = "1.0.2"
 
 # General configuration
 extensions = [
