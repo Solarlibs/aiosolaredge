@@ -242,6 +242,11 @@ async def test_get_power() -> None:
         mocked.get(pattern, payload={"power": "power"})
         assert await solar_edge.get_power(123, start, end) == {"power": "power"}
 
+        mocked.get(pattern, payload={"power": "power_str"})
+        assert await solar_edge.get_power(
+            123, "2013-06-04 11:00:00", "2013-06-04 14:00:00"
+        ) == {"power": "power_str"}
+
         pattern = re.compile(
             r"^https://monitoringapi\.solaredge\.com/sites/1,4/power\?"
         )
