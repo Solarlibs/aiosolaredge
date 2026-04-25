@@ -5,7 +5,7 @@ import aiohttp
 import pytest
 from aioresponses import aioresponses
 
-from aiosolaredge import SolarEdge
+from aiosolaredge import SolarEdge, SolarEdgeImage
 
 
 @pytest.mark.asyncio
@@ -454,4 +454,94 @@ async def test_get_versions() -> None:
         assert await solar_edge.get_supported_versions() == {
             "supported": ["0.9.5", "1.0.0"]
         }
+        await solar_edge.close()
+
+
+@pytest.mark.asyncio
+async def test_get_site_image() -> None:
+    """Test fetching the site image, including 304/404 handling."""
+    png_bytes = b"\x89PNG\r\n\x1a\nfake-png-bytes"
+    with aioresponses() as mocked:
+        solar_edge = SolarEdge("API_KEY")
+
+        mocked.get(
+            "https://monitoringapi.solaredge.com/site/123/siteImage?api_key=API_KEY",
+            status=200,
+            body=png_bytes,
+            headers={"Content-Type": "image/png", "ETag": "abc123"},
+        )
+        result = await solar_edge.get_site_image(123)
+        assert isinstance(result, SolarEdgeImage)
+        assert result.content == png_bytes
+        assert result.content_type == "image/png"
+        assert result.hash == "abc123"
+
+        pattern = re.compile(
+            r"^https://monitoringapi\.solaredge\.com/site/123/siteImage/myimage\.jpg\?.*"
+            r"hash=abc123.*maxHeight=200.*maxWidth=300"
+        )
+        mocked.get(
+            pattern,
+            status=200,
+            body=png_bytes,
+            headers={"Content-Type": "image/jpeg"},
+        )
+        result = await solar_edge.get_site_image(
+            123,
+            name="myimage.jpg",
+            max_width=300,
+            max_height=200,
+            hash="abc123",
+        )
+        assert isinstance(result, SolarEdgeImage)
+        assert result.content_type == "image/jpeg"
+        assert result.hash is None
+
+        mocked.get(
+            "https://monitoringapi.solaredge.com/site/123/siteImage?api_key=API_KEY",
+            status=304,
+        )
+        assert await solar_edge.get_site_image(123) is None
+
+        mocked.get(
+            "https://monitoringapi.solaredge.com/site/123/siteImage?api_key=API_KEY",
+            status=404,
+        )
+        assert await solar_edge.get_site_image(123) is None
+        await solar_edge.close()
+
+
+@pytest.mark.asyncio
+async def test_get_installer_image() -> None:
+    """Test fetching the installer logo image."""
+    jpg_bytes = b"\xff\xd8\xff\xe0fake-jpeg"
+    with aioresponses() as mocked:
+        solar_edge = SolarEdge("API_KEY")
+
+        mocked.get(
+            "https://monitoringapi.solaredge.com/site/123/installerImage?api_key=API_KEY",
+            status=200,
+            body=jpg_bytes,
+            headers={"Content-Type": "image/jpeg"},
+        )
+        result = await solar_edge.get_installer_image(123)
+        assert isinstance(result, SolarEdgeImage)
+        assert result.content == jpg_bytes
+        assert result.content_type == "image/jpeg"
+
+        mocked.get(
+            "https://monitoringapi.solaredge.com/site/123/installerImage/logo.png?api_key=API_KEY",
+            status=200,
+            body=jpg_bytes,
+            headers={"Content-Type": "image/png"},
+        )
+        result = await solar_edge.get_installer_image(123, name="logo.png")
+        assert isinstance(result, SolarEdgeImage)
+        assert result.content_type == "image/png"
+
+        mocked.get(
+            "https://monitoringapi.solaredge.com/site/123/installerImage?api_key=API_KEY",
+            status=404,
+        )
+        assert await solar_edge.get_installer_image(123) is None
         await solar_edge.close()

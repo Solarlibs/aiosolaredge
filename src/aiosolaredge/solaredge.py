@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from datetime import date, datetime
 from typing import Any, Iterable, Literal
 
@@ -10,6 +11,7 @@ import yarl
 _BASE_URL = yarl.URL("https://monitoringapi.solaredge.com")
 _DATETIME_FORMAT = "%Y-%m-%d %H:%M:%S"
 _DATE_FORMAT = "%Y-%m-%d"
+_DEFAULT_IMAGE_CONTENT_TYPE = "image/jpeg"
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -21,6 +23,27 @@ TimeUnit = Literal[
 ]
 SystemUnits = Literal["Metrics", "Imperial"]
 SortOrder = Literal["ASC", "DESC"]
+
+
+@dataclass(frozen=True)
+class SolarEdgeImage:
+    """
+    An image returned by the SolarEdge API.
+
+    :param content: The raw image bytes, suitable for serving directly to a
+        Home Assistant Image entity (e.g. via ``async_image()``).
+    :param content_type: The MIME type reported by the server,
+        e.g. ``"image/jpeg"`` or ``"image/png"``. Use this for the
+        Home Assistant Image entity ``content_type`` property.
+    :param hash: Server-side hash of the image, if provided. Pass it back on
+        a subsequent request via the ``hash`` parameter to allow the server
+        to short-circuit with HTTP 304 (returned as ``None`` from the
+        client) when the image has not changed.
+    """
+
+    content: bytes
+    content_type: str
+    hash: str | None = None
 
 
 def _format_date(value: date | datetime | str) -> str:
@@ -424,6 +447,72 @@ class SolarEdge:
             self._get_site_url(site_id).joinpath("envBenefits"), params=params
         )
 
+    async def get_site_image(
+        self,
+        site_id: int | str,
+        name: str | None = None,
+        max_width: int | None = None,
+        max_height: int | None = None,
+        hash: str | int | None = None,
+    ) -> SolarEdgeImage | None:
+        """
+        Get the site image as uploaded to the SolarEdge monitoring portal.
+
+        Use this to feed a Home Assistant Image entity: return
+        ``image.content`` from ``async_image()`` and ``image.content_type``
+        from the ``content_type`` property.
+
+        :param site_id: The site ID.
+        :param name: Optional file name to suggest to the caller / browser.
+            When omitted the original uploaded image is returned.
+        :param max_width: Optional maximum width to scale the image to.
+            Aspect ratio is preserved by the server.
+        :param max_height: Optional maximum height to scale the image to.
+            Aspect ratio is preserved by the server.
+        :param hash: Optional previously-returned image hash. If the image
+            has not changed the server replies with HTTP 304 and this method
+            returns ``None`` (use this to skip re-downloading unchanged
+            images). Ignored by the server when ``max_width``/``max_height``
+            are set.
+        :return: A :class:`SolarEdgeImage` with the image bytes and content
+            type, or ``None`` when the image is unchanged (HTTP 304) or the
+            site has no image (HTTP 404).
+        """
+        url = self._get_site_url(site_id).joinpath("siteImage")
+        if name is not None:
+            url = url.joinpath(name)
+        params: dict[str, Any] = {}
+        if max_width is not None:
+            params["maxWidth"] = max_width
+        if max_height is not None:
+            params["maxHeight"] = max_height
+        if hash is not None:
+            params["hash"] = hash
+        return await self._get_image(url, params=params)
+
+    async def get_installer_image(
+        self,
+        site_id: int | str,
+        name: str | None = None,
+    ) -> SolarEdgeImage | None:
+        """
+        Get the installer logo image for the site.
+
+        Falls back to the account installer logo if the site does not have
+        its own. Use this with a Home Assistant Image entity the same way
+        as :meth:`get_site_image`.
+
+        :param site_id: The site ID.
+        :param name: Optional file name to suggest to the caller / browser.
+        :return: A :class:`SolarEdgeImage` with the image bytes and content
+            type, or ``None`` if no installer logo is available
+            (HTTP 404).
+        """
+        url = self._get_site_url(site_id).joinpath("installerImage")
+        if name is not None:
+            url = url.joinpath(name)
+        return await self._get_image(url)
+
     async def get_inventory(self, site_id: int | str) -> dict[str, Any]:
         """
         Get inventory of the SolarEdge system.
@@ -612,3 +701,34 @@ class SolarEdge:
         json = await response.json()
         _LOGGER.debug("JSON from %s: %s", url, json)
         return json
+
+    async def _get_image(
+        self, url: yarl.URL, params: dict[str, Any] | None = None
+    ) -> SolarEdgeImage | None:
+        """
+        Get an image from the SolarEdge API.
+
+        Returns ``None`` for HTTP 304 (image unchanged, see the ``hash``
+        parameter on the public methods) and HTTP 404 (no image
+        available). Raises for any other non-2xx status.
+        """
+        _LOGGER.debug("Calling %s with params: %s", url, params)
+        response = await self.session.get(
+            url,
+            params={"api_key": self.api_key, **(params or {})},
+            timeout=self.timeout,
+        )
+        _LOGGER.debug("Response from %s: %s", url, response.status)
+        if response.status in (304, 404):
+            await response.release()
+            return None
+        response.raise_for_status()
+        content = await response.read()
+        content_type = response.headers.get(
+            "Content-Type", _DEFAULT_IMAGE_CONTENT_TYPE
+        )
+        return SolarEdgeImage(
+            content=content,
+            content_type=content_type,
+            hash=response.headers.get("ETag") or response.headers.get("Hash"),
+        )
