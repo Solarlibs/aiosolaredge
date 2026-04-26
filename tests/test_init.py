@@ -149,17 +149,13 @@ async def test_get_data_period() -> None:
             "https://monitoringapi.solaredge.com/site/123/dataPeriod?api_key=API_KEY",
             payload={"dataPeriod": "dataPeriod"},
         )
-        assert await solar_edge.get_data_period(123) == {
-            "dataPeriod": "dataPeriod"
-        }
+        assert await solar_edge.get_data_period(123) == {"dataPeriod": "dataPeriod"}
 
         mocked.get(
             "https://monitoringapi.solaredge.com/sites/1,4/dataPeriod?api_key=API_KEY",
             payload={"dataPeriod": "bulk"},
         )
-        assert await solar_edge.get_data_period_bulk([1, 4]) == {
-            "dataPeriod": "bulk"
-        }
+        assert await solar_edge.get_data_period_bulk([1, 4]) == {"dataPeriod": "bulk"}
         await solar_edge.close()
 
 
@@ -251,9 +247,7 @@ async def test_get_power() -> None:
             r"^https://monitoringapi\.solaredge\.com/sites/1,4/power\?"
         )
         mocked.get(pattern, payload={"power": "bulk"})
-        assert await solar_edge.get_power_bulk([1, 4], start, end) == {
-            "power": "bulk"
-        }
+        assert await solar_edge.get_power_bulk([1, 4], start, end) == {"power": "bulk"}
         await solar_edge.close()
 
 
@@ -331,9 +325,7 @@ async def test_get_environmental_benefits() -> None:
             "https://monitoringapi.solaredge.com/site/123/envBenefits?api_key=API_KEY",
             payload={"envBenefits": "eb"},
         )
-        assert await solar_edge.get_environmental_benefits(123) == {
-            "envBenefits": "eb"
-        }
+        assert await solar_edge.get_environmental_benefits(123) == {"envBenefits": "eb"}
 
         pattern = re.compile(
             r"^https://monitoringapi\.solaredge\.com/site/123/envBenefits\?.*"
@@ -385,9 +377,9 @@ async def test_get_equipment_change_log() -> None:
             "https://monitoringapi.solaredge.com/equipment/123/12345678-90/changeLog?api_key=API_KEY",
             payload={"ChangeLog": "log"},
         )
-        assert await solar_edge.get_equipment_change_log(
-            123, "12345678-90"
-        ) == {"ChangeLog": "log"}
+        assert await solar_edge.get_equipment_change_log(123, "12345678-90") == {
+            "ChangeLog": "log"
+        }
         await solar_edge.close()
 
 

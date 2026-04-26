@@ -15,12 +15,8 @@ _DEFAULT_IMAGE_CONTENT_TYPE = "image/jpeg"
 
 _LOGGER = logging.getLogger(__name__)
 
-Meter = Literal[
-    "PRODUCTION", "CONSUMPTION", "SELFCONSUMPTION", "FEEDIN", "PURCHASED"
-]
-TimeUnit = Literal[
-    "QUARTER_OF_AN_HOUR", "HOUR", "DAY", "WEEK", "MONTH", "YEAR"
-]
+Meter = Literal["PRODUCTION", "CONSUMPTION", "SELFCONSUMPTION", "FEEDIN", "PURCHASED"]
+TimeUnit = Literal["QUARTER_OF_AN_HOUR", "HOUR", "DAY", "WEEK", "MONTH", "YEAR"]
 SystemUnits = Literal["Metrics", "Imperial"]
 SortOrder = Literal["ASC", "DESC"]
 
@@ -133,9 +129,7 @@ class SolarEdge:
             params["sortOrder"] = sort_order
         if status is not None:
             params["status"] = status
-        return await self._get_json(
-            _BASE_URL.joinpath("sites", "list"), params=params
-        )
+        return await self._get_json(_BASE_URL.joinpath("sites", "list"), params=params)
 
     async def get_details(self, site_id: int | str) -> dict[str, Any]:
         """
@@ -153,9 +147,7 @@ class SolarEdge:
         :param site_id: The site ID.
         :return: The data period.
         """
-        return await self._get_json(
-            self._get_site_url(site_id).joinpath("dataPeriod")
-        )
+        return await self._get_json(self._get_site_url(site_id).joinpath("dataPeriod"))
 
     async def get_data_period_bulk(
         self, site_ids: Iterable[int | str]
@@ -321,18 +313,14 @@ class SolarEdge:
         """
         return await self._get_json(self._get_site_url(site_id).joinpath("overview"))
 
-    async def get_overview_bulk(
-        self, site_ids: Iterable[int | str]
-    ) -> dict[str, Any]:
+    async def get_overview_bulk(self, site_ids: Iterable[int | str]) -> dict[str, Any]:
         """
         Get overview data for multiple sites.
 
         :param site_ids: An iterable of site IDs (up to 100).
         :return: The overview per site.
         """
-        return await self._get_json(
-            self._get_sites_url(site_ids).joinpath("overview")
-        )
+        return await self._get_json(self._get_sites_url(site_ids).joinpath("overview"))
 
     async def get_power_details(
         self,
@@ -532,9 +520,7 @@ class SolarEdge:
         :param site_id: The site ID.
         :return: The components list.
         """
-        return await self._get_json(
-            self._get_equipment_url(site_id).joinpath("list")
-        )
+        return await self._get_json(self._get_equipment_url(site_id).joinpath("list"))
 
     async def get_inverter_technical_data(
         self,
@@ -727,9 +713,7 @@ class SolarEdge:
             return None
         response.raise_for_status()
         content = await response.read()
-        content_type = response.headers.get(
-            "Content-Type", _DEFAULT_IMAGE_CONTENT_TYPE
-        )
+        content_type = response.headers.get("Content-Type", _DEFAULT_IMAGE_CONTENT_TYPE)
         return SolarEdgeImage(
             content=content,
             content_type=content_type,
