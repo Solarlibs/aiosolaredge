@@ -7,6 +7,8 @@ from typing import Any, Iterable, Literal
 import aiohttp
 import yarl
 
+from .models import StorageData
+
 _BASE_URL = yarl.URL("https://monitoringapi.solaredge.com")
 _DATETIME_FORMAT = "%Y-%m-%d %H:%M:%S"
 
@@ -125,6 +127,33 @@ class SolarEdge:
         if serials:
             params["serials"] = ",".join(serials)
         return await self._get_json(url, params=params)
+
+    async def get_parsed_storage_data(
+        self,
+        site_id: int | str,
+        start_time: datetime,
+        end_time: datetime,
+        serials: Iterable[str] = (),
+    ) -> StorageData:
+        """
+        Get parsed battery storage data from the SolarEdge site.
+
+        Convenience wrapper around :meth:`get_storage_data` that parses the raw
+        response into :class:`~aiosolaredge.models.StorageData`. The charge and
+        discharge energy are derived by integrating the ``power`` telemetry,
+        because SolarEdge frequently reports the lifetime energy counters as 0
+        even while the battery is cycling. Limited to a one-week period.
+
+        :param site_id: The site ID.
+        :param start_time: The start time.
+        :param end_time: The end time.
+        :param serials: Optional battery serial numbers to filter by.
+        :return: The parsed storage data of the SolarEdge system.
+        :raises KeyError: if the response is missing ``storageData`` or its
+            ``batteries`` list.
+        """
+        response = await self.get_storage_data(site_id, start_time, end_time, serials)
+        return StorageData.from_response(response)
 
     async def get_current_power_flow(self, site_id: int | str) -> dict[str, Any]:
         """

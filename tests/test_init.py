@@ -109,4 +109,32 @@ async def test_simple_requests() -> None:
             datetime.datetime.now(),
             serials=["SN1", "SN2"],
         ) == {"storageData": {"batteryCount": 1, "batteries": []}}
+
+        parsed_pattern = re.compile(
+            r"^https://monitoringapi\.solaredge\.com/site/123/storageData"
+        )
+        mocked.get(
+            parsed_pattern,
+            payload={
+                "storageData": {
+                    "batteryCount": 1,
+                    "batteries": [
+                        {
+                            "serialNumber": "SN1",
+                            "telemetries": [
+                                {"timeStamp": "2026-06-05 00:00:00", "power": 0},
+                                {"timeStamp": "2026-06-05 01:00:00", "power": 2000},
+                            ],
+                        }
+                    ],
+                }
+            },
+        )
+        storage = await solar_edge.get_parsed_storage_data(
+            123, datetime.datetime.now(), datetime.datetime.now()
+        )
+        assert len(storage.batteries) == 1
+        assert storage.batteries[0].serial_number == "SN1"
+        assert storage.total_charge_energy == 1000.0
+        assert storage.total_discharge_energy == 0.0
         await solar_edge.close()
