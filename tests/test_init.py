@@ -3,7 +3,7 @@ import re
 
 import aiohttp
 import pytest
-from aioresponses import aioresponses
+from aiointercept import aiointercept
 
 from aiosolaredge import SolarEdge
 
@@ -33,7 +33,7 @@ async def test_create_object_passed_session():
 @pytest.mark.asyncio
 async def test_simple_requests() -> None:
     """Creating an object works as expected."""
-    with aioresponses() as mocked:
+    async with aiointercept(mock_external_urls=True) as mocked:
         solar_edge = SolarEdge("API_KEY")
         assert solar_edge.timeout == 10
         assert solar_edge.api_key == "API_KEY"
