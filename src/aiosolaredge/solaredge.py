@@ -34,8 +34,19 @@ def _format_datetime(value: datetime | str) -> str:
 
 
 def _join_ids(site_ids: Iterable[int | str]) -> str:
-    """Join site IDs with a comma for bulk API calls."""
-    return ",".join(str(site_id) for site_id in site_ids)
+    """
+    Join site IDs with a comma for bulk API calls.
+
+    :param site_ids: An iterable of site IDs.
+    :return: The comma separated site IDs.
+    :raises ValueError: If ``site_ids`` is empty. Joining nothing would build
+        an invalid bulk URL such as ``/sites//energy``, so fail fast with a
+        clear error rather than letting the server reject it.
+    """
+    joined = ",".join(str(site_id) for site_id in site_ids)
+    if not joined:
+        raise ValueError("site_ids must contain at least one site ID")
+    return joined
 
 
 class SolarEdge:
@@ -98,12 +109,8 @@ class SolarEdge:
         site_id: int | str,
         start_time: datetime,
         end_time: datetime,
-        meters: Iterable[
-            Literal[
-                "PRODUCTION", "CONSUMPTION", "SELFCONSUMPTION", "FEEDIN", "PURCHASED"
-            ]
-        ] = [],
-        time_unit: str = "DAY",
+        meters: Iterable[Meter] = (),
+        time_unit: TimeUnit = "DAY",
     ) -> dict[str, Any]:
         """
         Get energy details of the SolarEdge system.

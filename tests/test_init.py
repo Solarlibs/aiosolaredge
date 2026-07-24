@@ -186,7 +186,7 @@ async def test_get_energy() -> None:
 
         pattern = re.compile(
             r"^https://monitoringapi\.solaredge\.com/sites/1,4/energy\?"
-            r"(?=.*startDate=2013-05-01)(?=.*endDate=2013-05-30).*$"
+            r"(?=.*startDate=2013-05-01)(?=.*endDate=2013-05-30)(?=.*timeUnit=DAY).*$"
         )
         mocked.get(pattern, payload={"energy": "bulk"})
         assert await solar_edge.get_energy_bulk(
@@ -310,3 +310,22 @@ async def test_get_environmental_benefits() -> None:
             123, system_units="Imperial"
         ) == {"envBenefits": "imperial"}
         await solar_edge.close()
+
+
+@pytest.mark.asyncio
+async def test_bulk_endpoints_reject_empty_site_ids() -> None:
+    """Bulk endpoints fail fast rather than building an invalid /sites// URL."""
+    solar_edge = SolarEdge("API_KEY")
+    with pytest.raises(ValueError, match="at least one site ID"):
+        await solar_edge.get_data_period_bulk([])
+    with pytest.raises(ValueError, match="at least one site ID"):
+        await solar_edge.get_overview_bulk([])
+    with pytest.raises(ValueError, match="at least one site ID"):
+        await solar_edge.get_energy_bulk([], "2013-05-01", "2013-05-30")
+    with pytest.raises(ValueError, match="at least one site ID"):
+        await solar_edge.get_time_frame_energy_bulk([], "2013-05-01", "2013-05-06")
+    with pytest.raises(ValueError, match="at least one site ID"):
+        await solar_edge.get_power_bulk(
+            [], "2013-06-04 11:00:00", "2013-06-04 14:00:00"
+        )
+    await solar_edge.close()
