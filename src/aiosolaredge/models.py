@@ -31,30 +31,45 @@ def integrate_power(telemetries: list[dict[str, Any]]) -> tuple[float, float]:
     trapezoidal integration of the power (W) over time. Positive power means
     the battery is charging, negative power means it is discharging.
 
+    When the power changes sign within an interval, the interval is split at
+    the zero crossing (linear interpolation), so the charged and discharged
+    parts are both counted instead of cancelling each other out. Entries with a
+    missing or unparsable ``timeStamp`` are skipped, and the interval between
+    the surrounding valid entries is still integrated.
+
     :param telemetries: The ``telemetries`` list of a single battery, ordered
         chronologically. Each entry is expected to have a ``timeStamp``
         (``"%Y-%m-%d %H:%M:%S"``) and a ``power`` value in Watts.
     :return: A ``(charge_energy, discharge_energy)`` tuple in Wh.
     """
+    samples = [
+        (timestamp, float(telemetry.get("power") or 0.0))
+        for telemetry in telemetries
+        if (timestamp := _parse_timestamp(telemetry.get("timeStamp"))) is not None
+    ]
     charge_energy = 0.0
     discharge_energy = 0.0
-    for previous, current in pairwise(telemetries):
-        previous_time = _parse_timestamp(previous.get("timeStamp"))
-        current_time = _parse_timestamp(current.get("timeStamp"))
-        if previous_time is None or current_time is None:
-            continue
+    for (previous_time, previous_power), (current_time, current_power) in pairwise(
+        samples
+    ):
         interval = (current_time - previous_time).total_seconds() / 3600
         if interval <= 0:
             continue
-        # Trapezoidal integration of power (W) over the interval (h) -> Wh.
-        average_power = (
-            (previous.get("power") or 0.0) + (current.get("power") or 0.0)
-        ) / 2
-        energy = average_power * interval
-        if energy >= 0:
-            charge_energy += energy
+        # Trapezoidal integration of power (W) over the interval (h) -> Wh,
+        # split at the zero crossing when the sign changes.
+        if previous_power * current_power < 0:
+            crossing = previous_power / (previous_power - current_power)
+            segments = (
+                previous_power / 2 * crossing * interval,
+                current_power / 2 * (1 - crossing) * interval,
+            )
         else:
-            discharge_energy -= energy
+            segments = ((previous_power + current_power) / 2 * interval,)
+        for energy in segments:
+            if energy >= 0:
+                charge_energy += energy
+            else:
+                discharge_energy -= energy
     return charge_energy, discharge_energy
 
 

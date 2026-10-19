@@ -30,7 +30,8 @@ def _telemetry(timestamp, power):
             ],
             (0.0, 500.0),
         ),
-        # Mixed charge then discharge.
+        # Mixed charge then discharge. The middle hour crosses zero at 01:30,
+        # so it adds 250 Wh to each side instead of cancelling out.
         (
             [
                 _telemetry("2026-06-05 00:00:00", 1000),
@@ -38,7 +39,7 @@ def _telemetry(timestamp, power):
                 _telemetry("2026-06-05 02:00:00", -1000),
                 _telemetry("2026-06-05 03:00:00", -1000),
             ],
-            (1000.0, 1000.0),
+            (1250.0, 1250.0),
         ),
         # Unparsable / missing timestamps are skipped.
         (
@@ -48,6 +49,40 @@ def _telemetry(timestamp, power):
                 _telemetry(None, 2000),
             ],
             (0.0, 0.0),
+        ),
+        # An invalid entry between valid ones does not drop the interval.
+        (
+            [
+                _telemetry("2026-06-05 00:00:00", 1000),
+                _telemetry("not-a-timestamp", 5000),
+                _telemetry("2026-06-05 02:00:00", 1000),
+            ],
+            (2000.0, 0.0),
+        ),
+        # A sign change within an interval is split at the zero crossing,
+        # so charge and discharge do not cancel out.
+        (
+            [
+                _telemetry("2026-06-05 00:00:00", 1000),
+                _telemetry("2026-06-05 01:00:00", -1000),
+            ],
+            (250.0, 250.0),
+        ),
+        # Asymmetric crossing: zero is reached after 45 minutes.
+        (
+            [
+                _telemetry("2026-06-05 00:00:00", 3000),
+                _telemetry("2026-06-05 01:00:00", -1000),
+            ],
+            (1125.0, 125.0),
+        ),
+        # Discharge to charge.
+        (
+            [
+                _telemetry("2026-06-05 00:00:00", -2000),
+                _telemetry("2026-06-05 01:00:00", 2000),
+            ],
+            (500.0, 500.0),
         ),
         # Non-monotonic timestamps (interval <= 0) are skipped.
         (
