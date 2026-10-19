@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any, Iterable, Literal
 
 import aiohttp
@@ -9,8 +9,44 @@ import yarl
 
 _BASE_URL = yarl.URL("https://monitoringapi.solaredge.com")
 _DATETIME_FORMAT = "%Y-%m-%d %H:%M:%S"
+_DATE_FORMAT = "%Y-%m-%d"
 
 _LOGGER = logging.getLogger(__name__)
+
+Meter = Literal["PRODUCTION", "CONSUMPTION", "SELFCONSUMPTION", "FEEDIN", "PURCHASED"]
+TimeUnit = Literal["QUARTER_OF_AN_HOUR", "HOUR", "DAY", "WEEK", "MONTH", "YEAR"]
+SystemUnits = Literal["Metrics", "Imperial"]
+SortOrder = Literal["ASC", "DESC"]
+
+
+def _format_date(value: date | datetime | str) -> str:
+    """Format a date value for the SolarEdge API (YYYY-MM-DD)."""
+    if isinstance(value, str):
+        return value
+    return value.strftime(_DATE_FORMAT)
+
+
+def _format_datetime(value: datetime | str) -> str:
+    """Format a datetime value for the SolarEdge API (YYYY-MM-DD hh:mm:ss)."""
+    if isinstance(value, str):
+        return value
+    return value.strftime(_DATETIME_FORMAT)
+
+
+def _join_ids(site_ids: Iterable[int | str]) -> str:
+    """
+    Join site IDs with a comma for bulk API calls.
+
+    :param site_ids: An iterable of site IDs.
+    :return: The comma separated site IDs.
+    :raises ValueError: If ``site_ids`` is empty. Joining nothing would build
+        an invalid bulk URL such as ``/sites//energy``, so fail fast with a
+        clear error rather than letting the server reject it.
+    """
+    joined = ",".join(str(site_id) for site_id in site_ids)
+    if not joined:
+        raise ValueError("site_ids must contain at least one site ID")
+    return joined
 
 
 class SolarEdge:
@@ -36,6 +72,10 @@ class SolarEdge:
     def _get_site_url(self, site_id: int | str) -> yarl.URL:
         """Get the site URL."""
         return _BASE_URL.joinpath("site", str(site_id))
+
+    def _get_sites_url(self, site_ids: Iterable[int | str]) -> yarl.URL:
+        """Get the bulk sites URL."""
+        return _BASE_URL.joinpath("sites", _join_ids(site_ids))
 
     async def get_details(self, site_id: int | str) -> dict[str, Any]:
         """
@@ -69,12 +109,8 @@ class SolarEdge:
         site_id: int | str,
         start_time: datetime,
         end_time: datetime,
-        meters: Iterable[
-            Literal[
-                "PRODUCTION", "CONSUMPTION", "SELFCONSUMPTION", "FEEDIN", "PURCHASED"
-            ]
-        ] = [],
-        time_unit: str = "DAY",
+        meters: Iterable[Meter] = (),
+        time_unit: TimeUnit = "DAY",
     ) -> dict[str, Any]:
         """
         Get energy details of the SolarEdge system.
@@ -135,6 +171,263 @@ class SolarEdge:
         """
         return await self._get_json(
             self._get_site_url(site_id).joinpath("currentPowerFlow")
+        )
+
+    async def get_sites(
+        self,
+        size: int | None = None,
+        start_index: int | None = None,
+        search_text: str | None = None,
+        sort_property: str | None = None,
+        sort_order: SortOrder | None = None,
+        status: str | None = None,
+    ) -> dict[str, Any]:
+        """
+        Get the list of sites for the given account API key.
+
+        :param size: Maximum number of sites to return (default 100, max 100).
+        :param start_index: First site index to be returned in the results.
+        :param search_text: Search text for sites
+            (Name, Notes, Address, City, Zip, Full address, Country).
+        :param sort_property: Sorting option for the site list (e.g. "Name",
+            "Country", "Status", "PeakPower", "InstallationDate", etc.).
+        :param sort_order: Sort order: "ASC" or "DESC" (default "ASC").
+        :param status: Filter sites by status. A comma-separated combination
+            of "Active", "Pending", "Disabled" or "All".
+        :return: The list of sites.
+        """
+        params: dict[str, Any] = {}
+        if size is not None:
+            params["size"] = size
+        if start_index is not None:
+            params["startIndex"] = start_index
+        if search_text is not None:
+            params["searchText"] = search_text
+        if sort_property is not None:
+            params["sortProperty"] = sort_property
+        if sort_order is not None:
+            params["sortOrder"] = sort_order
+        if status is not None:
+            params["status"] = status
+        return await self._get_json(_BASE_URL.joinpath("sites", "list"), params=params)
+
+    async def get_data_period(self, site_id: int | str) -> dict[str, Any]:
+        """
+        Get the energy production start and end dates for the site.
+
+        :param site_id: The site ID.
+        :return: The data period.
+        """
+        return await self._get_json(self._get_site_url(site_id).joinpath("dataPeriod"))
+
+    async def get_data_period_bulk(
+        self, site_ids: Iterable[int | str]
+    ) -> dict[str, Any]:
+        """
+        Get the energy production start and end dates for multiple sites.
+
+        :param site_ids: An iterable of site IDs (up to 100).
+        :return: The data period for each site.
+        """
+        return await self._get_json(
+            self._get_sites_url(site_ids).joinpath("dataPeriod")
+        )
+
+    async def get_energy(
+        self,
+        site_id: int | str,
+        start_date: date | datetime | str,
+        end_date: date | datetime | str,
+        time_unit: TimeUnit = "DAY",
+    ) -> dict[str, Any]:
+        """
+        Get site energy measurements.
+
+        :param site_id: The site ID.
+        :param start_date: The start date.
+        :param end_date: The end date.
+        :param time_unit: Aggregation granularity. Default "DAY".
+            Allowed values: "QUARTER_OF_AN_HOUR", "HOUR", "DAY",
+            "WEEK", "MONTH", "YEAR".
+        :return: Site energy measurements.
+        """
+        params = {
+            "startDate": _format_date(start_date),
+            "endDate": _format_date(end_date),
+            "timeUnit": time_unit,
+        }
+        return await self._get_json(
+            self._get_site_url(site_id).joinpath("energy"), params=params
+        )
+
+    async def get_energy_bulk(
+        self,
+        site_ids: Iterable[int | str],
+        start_date: date | datetime | str,
+        end_date: date | datetime | str,
+        time_unit: TimeUnit = "DAY",
+    ) -> dict[str, Any]:
+        """
+        Get site energy measurements for multiple sites.
+
+        :param site_ids: An iterable of site IDs (up to 100).
+        :param start_date: The start date.
+        :param end_date: The end date.
+        :param time_unit: Aggregation granularity. Default "DAY".
+        :return: Site energy measurements per site.
+        """
+        params = {
+            "startDate": _format_date(start_date),
+            "endDate": _format_date(end_date),
+            "timeUnit": time_unit,
+        }
+        return await self._get_json(
+            self._get_sites_url(site_ids).joinpath("energy"), params=params
+        )
+
+    async def get_time_frame_energy(
+        self,
+        site_id: int | str,
+        start_date: date | datetime | str,
+        end_date: date | datetime | str,
+    ) -> dict[str, Any]:
+        """
+        Get the site total energy produced for a given time period.
+
+        :param site_id: The site ID.
+        :param start_date: The start date.
+        :param end_date: The end date.
+        :return: The total energy for the period.
+        """
+        params = {
+            "startDate": _format_date(start_date),
+            "endDate": _format_date(end_date),
+        }
+        return await self._get_json(
+            self._get_site_url(site_id).joinpath("timeFrameEnergy"),
+            params=params,
+        )
+
+    async def get_time_frame_energy_bulk(
+        self,
+        site_ids: Iterable[int | str],
+        start_date: date | datetime | str,
+        end_date: date | datetime | str,
+    ) -> dict[str, Any]:
+        """
+        Get the total energy produced for a given time period for multiple sites.
+
+        :param site_ids: An iterable of site IDs (up to 100).
+        :param start_date: The start date.
+        :param end_date: The end date.
+        :return: The total energy per site.
+        """
+        params = {
+            "startDate": _format_date(start_date),
+            "endDate": _format_date(end_date),
+        }
+        return await self._get_json(
+            self._get_sites_url(site_ids).joinpath("timeFrameEnergy"),
+            params=params,
+        )
+
+    async def get_power(
+        self,
+        site_id: int | str,
+        start_time: datetime | str,
+        end_time: datetime | str,
+    ) -> dict[str, Any]:
+        """
+        Get site power measurements at 15-minute resolution.
+
+        :param site_id: The site ID.
+        :param start_time: The start time.
+        :param end_time: The end time.
+        :return: Site power measurements.
+        """
+        params = {
+            "startTime": _format_datetime(start_time),
+            "endTime": _format_datetime(end_time),
+        }
+        return await self._get_json(
+            self._get_site_url(site_id).joinpath("power"), params=params
+        )
+
+    async def get_power_bulk(
+        self,
+        site_ids: Iterable[int | str],
+        start_time: datetime | str,
+        end_time: datetime | str,
+    ) -> dict[str, Any]:
+        """
+        Get power measurements at 15-minute resolution for multiple sites.
+
+        :param site_ids: An iterable of site IDs (up to 100).
+        :param start_time: The start time.
+        :param end_time: The end time.
+        :return: Site power measurements per site.
+        """
+        params = {
+            "startTime": _format_datetime(start_time),
+            "endTime": _format_datetime(end_time),
+        }
+        return await self._get_json(
+            self._get_sites_url(site_ids).joinpath("power"), params=params
+        )
+
+    async def get_overview_bulk(self, site_ids: Iterable[int | str]) -> dict[str, Any]:
+        """
+        Get overview data for multiple sites.
+
+        :param site_ids: An iterable of site IDs (up to 100).
+        :return: The overview per site.
+        """
+        return await self._get_json(self._get_sites_url(site_ids).joinpath("overview"))
+
+    async def get_power_details(
+        self,
+        site_id: int | str,
+        start_time: datetime | str,
+        end_time: datetime | str,
+        meters: Iterable[Meter] = (),
+    ) -> dict[str, Any]:
+        """
+        Get detailed site power measurements from meters.
+
+        :param site_id: The site ID.
+        :param start_time: The start time.
+        :param end_time: The end time.
+        :param meters: Optional iterable of meter types
+            (PRODUCTION, CONSUMPTION, SELFCONSUMPTION, FEEDIN, PURCHASED).
+        :return: Detailed site power measurements.
+        """
+        params: dict[str, Any] = {
+            "startTime": _format_datetime(start_time),
+            "endTime": _format_datetime(end_time),
+        }
+        if meters:
+            params["meters"] = ",".join(meters)
+        return await self._get_json(
+            self._get_site_url(site_id).joinpath("powerDetails"), params=params
+        )
+
+    async def get_environmental_benefits(
+        self,
+        site_id: int | str,
+        system_units: SystemUnits | None = None,
+    ) -> dict[str, Any]:
+        """
+        Get environmental benefits based on site energy production.
+
+        :param site_id: The site ID.
+        :param system_units: Optional unit system: "Metrics" or "Imperial".
+        :return: Environmental benefits (CO2 saved, trees planted, etc.).
+        """
+        params: dict[str, Any] = {}
+        if system_units is not None:
+            params["systemUnits"] = system_units
+        return await self._get_json(
+            self._get_site_url(site_id).joinpath("envBenefits"), params=params
         )
 
     async def _get_json(
