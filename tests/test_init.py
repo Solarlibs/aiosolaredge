@@ -231,16 +231,25 @@ async def test_get_power() -> None:
         solar_edge = SolarEdge("API_KEY")
         start = datetime.datetime(2013, 6, 4, 11, 0, 0)
         end = datetime.datetime(2013, 6, 4, 14, 0, 0)
+        # The space and colons in "YYYY-MM-DD hh:mm:ss" may be percent-encoded.
+        sep, colon = r"(?:%20|\+| )", r"(?::|%3A)"
         pattern = re.compile(
             r"^https://monitoringapi\.solaredge\.com/site/123/power\?"
-            r"(?=.*startTime=2013-06-04)(?=.*endTime=2013-06-04).*$"
+            rf"(?=.*startTime=2013-06-04{sep}11{colon}00{colon}00)"
+            rf"(?=.*endTime=2013-06-04{sep}14{colon}00{colon}00).*$"
         )
         mocked.get(pattern, payload={"power": "power"})
         assert await solar_edge.get_power(123, start, end) == {"power": "power"}
 
-        mocked.get(pattern, payload={"power": "power_str"})
+        # Strings are passed through unchanged, including the time of day.
+        str_pattern = re.compile(
+            r"^https://monitoringapi\.solaredge\.com/site/123/power\?"
+            rf"(?=.*startTime=2013-06-04{sep}09{colon}15{colon}00)"
+            rf"(?=.*endTime=2013-06-04{sep}10{colon}45{colon}00).*$"
+        )
+        mocked.get(str_pattern, payload={"power": "power_str"})
         assert await solar_edge.get_power(
-            123, "2013-06-04 11:00:00", "2013-06-04 14:00:00"
+            123, "2013-06-04 09:15:00", "2013-06-04 10:45:00"
         ) == {"power": "power_str"}
 
         pattern = re.compile(
