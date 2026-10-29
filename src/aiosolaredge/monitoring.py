@@ -96,25 +96,36 @@ class BasicMonitoring(SolarEdgeV2):
         return result
 
     async def inventory(self, site_id: str) -> dict[str, list[dict[str, Any]]]:
-        """Request native device types explicitly, not just the inverter default."""
+        """
+        Request native device types explicitly, not just the inverter default.
+
+        Meters are identified per role: one physical meter is listed once per
+        meterType (e.g. FeedIn and Purchased), and calculated meters with form
+        "virtual" carry no serial. Every other device needs a unique serial.
+        """
         data = await self._get(
             _site_path(site_id) + "/devices",
             [("types", kind) for kind in INVENTORY.values()],
             array=True,
         )
         result: dict[str, list[dict[str, Any]]] = {key: [] for key in INVENTORY}
-        seen = set()
+        seen: set[tuple[Any, ...]] = set()
         for item in data:
-            if (
-                not isinstance(item, dict)
-                or not isinstance(item.get("serialNumber"), str)
-                or not item["serialNumber"]
-            ):
+            if not isinstance(item, dict):
                 raise InvalidResponseError("Invalid inventory device")
             kind = item.get("type")
-            if kind not in INVENTORY.values() or (kind, item["serialNumber"]) in seen:
+            serial = item.get("serialNumber")
+            virtual_meter = kind == "METER" and item.get("form") == "virtual"
+            if not (isinstance(serial, str) and serial) and not (
+                virtual_meter and serial is None
+            ):
+                raise InvalidResponseError("Invalid inventory device")
+            identity: tuple[Any, ...] = (kind, serial)
+            if kind == "METER":
+                identity += (item.get("meterType"),)
+            if kind not in INVENTORY.values() or identity in seen:
                 raise InvalidResponseError("Unexpected or duplicate inventory device")
-            seen.add((kind, item["serialNumber"]))
+            seen.add(identity)
             key = next(key for key, value in INVENTORY.items() if value == kind)
             result[key].append(
                 {

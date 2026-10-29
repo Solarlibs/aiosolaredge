@@ -2,6 +2,7 @@
 
 import re
 from datetime import datetime, timedelta, timezone
+from typing import Any
 from unittest.mock import AsyncMock
 
 import aiohttp
@@ -108,6 +109,94 @@ async def test_inventory_explicit_types_and_allowlist():
                 "GATEWAY",
                 "METER",
             }
+
+
+@pytest.mark.asyncio
+async def test_inventory_virtual_and_multi_role_meters():
+    """One physical meter is listed per role; calculated meters have no serial."""
+    meters: list[dict[str, Any]] = [
+        {"serialNumber": None, "meterType": "SelfConsumption", "form": "virtual"},
+        {"serialNumber": "M1", "meterType": "FeedIn", "form": "physical"},
+        {"serialNumber": "M1", "meterType": "Purchased", "form": "physical"},
+        {"serialNumber": None, "meterType": "Consumption", "form": "virtual"},
+    ]
+    async with aiohttp.ClientSession() as session:
+        api = BasicMonitoring(session, AsyncMock(return_value="synthetic"))
+        async with aiointercept(mock_external_urls=True) as mock:
+            mock.get(
+                re.compile(re.escape(BASE + "/devices") + r"(?:\?.*)?$"),
+                payload=[
+                    {"serialNumber": "I1", "type": "INVERTER", "connectedTo": None},
+                    *(
+                        {**meter, "type": "METER", "connectedTo": "I1"}
+                        for meter in meters
+                    ),
+                ],
+            )
+            data = await api.inventory("123")
+    assert data["inverters"] == [{"serialNumber": "I1", "type": "INVERTER"}]
+    assert data["meters"] == [{**meter, "type": "METER"} for meter in meters]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "devices",
+    [
+        ["not-a-device"],
+        [{"serialNumber": "X1", "type": "OPTIMIZER"}],
+        [{"serialNumber": None, "type": "METER", "meterType": "FeedIn"}],
+        [
+            {
+                "serialNumber": None,
+                "type": "METER",
+                "meterType": "FeedIn",
+                "form": "physical",
+            }
+        ],
+        [
+            {
+                "serialNumber": "",
+                "type": "METER",
+                "meterType": "Consumption",
+                "form": "virtual",
+            }
+        ],
+        [{"serialNumber": None, "type": "BATTERY", "form": "virtual"}],
+        [
+            {"serialNumber": "M1", "type": "METER", "meterType": "FeedIn"},
+            {"serialNumber": "M1", "type": "METER", "meterType": "FeedIn"},
+        ],
+        [
+            {"type": "METER", "meterType": "Consumption", "form": "virtual"},
+            {"type": "METER", "meterType": "Consumption", "form": "virtual"},
+        ],
+        [
+            {"serialNumber": "I1", "type": "INVERTER"},
+            {"serialNumber": "I1", "type": "INVERTER"},
+        ],
+    ],
+    ids=[
+        "non-object-device",
+        "unrequested-type",
+        "meter-without-serial-or-form",
+        "physical-meter-without-serial",
+        "virtual-meter-empty-serial",
+        "battery-without-serial",
+        "same-meter-role-twice",
+        "same-virtual-role-twice",
+        "same-inverter-twice",
+    ],
+)
+async def test_inventory_rejects_ambiguous_identity(devices):
+    async with aiohttp.ClientSession() as session:
+        api = BasicMonitoring(session, AsyncMock(return_value="synthetic"))
+        async with aiointercept(mock_external_urls=True) as mock:
+            mock.get(
+                re.compile(re.escape(BASE + "/devices") + r"(?:\?.*)?$"),
+                payload=devices,
+            )
+            with pytest.raises(InvalidResponseError):
+                await api.inventory("123")
 
 
 @pytest.mark.asyncio
